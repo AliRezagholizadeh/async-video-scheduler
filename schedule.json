@@ -1,14 +1,19 @@
-{
-  "program_schedule": {
-    "start_time": "18:00",
-    "type": "# out of  [TV, TV_Live, Live]",
-    "on-time_contents": [
-      {"name": "start_program", "type":  "video", "play_time": "18:00", "next_contents": "body1"},
-      {"name":  "news", "type":  "video", "play_time":  "20:01", "next_contents": "body2"},
-    ],
-    "on_time_content_path": "source/video/ontime_contents/",
-    "on_time_next_content_path": "source/video/"
+
+  {
+    "program_schedule":
+    {
+      "start_time": "18:00",
+      "type": "# out of  [TV, TV_Live, Live]",
+      "on-time_contents":
+      [
+        {"name": "start_program", "type":  "video", "play_time": "18:00", "next_contents": "body1"},
+        {"name":  "news", "type":  "video", "play_time":  "20:01", "next_contents": "body2"}
+      ],
+      "on_time_content_path": "source/video/ontime_contents/",
+      "on_time_next_content_path": "source/video/"
+    }
+
   }
 
-}
+
 
