@@ -32,7 +32,7 @@ async def main():
     source_dir = config["program_source_path"]["video"]
     print(f"config type: {type(config)}")
     program = program_pipeline(config=config, program_schedule=schedule)
-    server_task = asyncio.create_task(program.run_server())
+    # server_task = asyncio.create_task(program.run_server())
     schedule_task = asyncio.create_task(program.set_run_schedule())
 
     print("main: awaiting schedule_task")
