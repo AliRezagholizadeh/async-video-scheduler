@@ -2,14 +2,18 @@ from typing import List
 
 from scheduler.utils import ReqPATH, ReqField, DateTimeFormatProperty, ValidTimeFormat, ValidDateTimeFormat, Either
 from scheduler.utils import PlayingDateTimeProperty
+from scheduler.streaming_utils import adjust_volume
 from pathlib import Path
 # from datetime import datetime
-from enum import Enum
 import datetime
 import asyncio
 import cv2
-from moviepy.video import VideoClip
+from moviepy import VideoFileClip
 from pydub import AudioSegment
+
+from enum import Enum
+import tempfile
+import os
 
 
 
@@ -79,7 +83,10 @@ class Video:
 
 
         self.adjust_video_audio_dB()
+        print("passed adjust_video_audio_dB")
         self.get_videoInfo()
+        print("passed get_videoInfo")
+
         print(self)
 
     # @property
@@ -126,7 +133,7 @@ class Video:
                f" ----> Name: {self.Name}"\
                f" ----> Length: {self.Length}"\
                f" ----> Resolution: {self.Resolution}"\
-               f" ----> Sound Strength: {self.SoundStrength}"\
+               f" ----> Sound Strength: .... "\
                f" ----> PATH: {self.PATH}" \
                f" ----> changelog: {self.changelog}" \
                f"{('-') * 20} \n"
@@ -153,52 +160,61 @@ class Video:
 
 
 
+    # def adjust_video_audio_dB(self):
+    #     # Google AI-generated function:
+    #     # https://www.google.com/search?q=Is+there+any+way+to+adjust+sound+db+for+several+videos+in+python%3F&sca_esv=3f2684b5ae9554a2&rlz=1C5CHFA_enCA1000CA1000&sxsrf=AE3TifOFtlcJnjJ2wYNrp1OlNLNrpt5uzg%3A1748463084869&ei=7G03aOXjNNDV5NoP7LTOuQE&ved=0ahUKEwjlic7I_MaNAxXQKlkFHWyaMxcQ4dUDCBE&uact=5&oq=Is+there+any+way+to+adjust+sound+db+for+several+videos+in+python%3F&gs_lp=Egxnd3Mtd2l6LXNlcnAiQUlzIHRoZXJlIGFueSB3YXkgdG8gYWRqdXN0IHNvdW5kIGRiIGZvciBzZXZlcmFsIHZpZGVvcyBpbiBweXRob24_SIVIUNgKWK5GcAJ4AZABAJgBygGgAagIqgEFNy4zLjG4AQPIAQD4AQGYAgegApYFwgIKEAAYsAMY1gQYR8ICBRAAGO8FwgIIEAAYgAQYogTCAggQABiiBBiJBZgDAIgGAZAGCJIHBTMuMy4xoAe9HbIHBTEuMy4xuAeLBcIHBTAuMS42yAca&sclient=gws-wiz-serp
+    #     #
+    #
+    #
+    #     # 1. Extract Audio
+    #     # clip = VideoFileClip(video_path)
+    #     clip = VideoFileClip(self.PATH)
+    #     audio = clip.audio
+    #     clip.close()
+    #
+    #     if(audio is not None):
+    #         # write the audio in a temporary .wav file
+    #         temp_audio_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+    #         # audio.write_audiofile(temp_audio_file.name)
+    #         print(audio)
+    #         # audio.write_audiofile("audio.wav")
+    #         audio.write_audiofile("audio.wav")
+    #         # 2. Load into Pydub
+    #         # audio_seg = AudioSegment.from_file(temp_audio_file.name)
+    #         audio_seg = AudioSegment.from_file("audio.wav")
+    #
+    #         # 3. Adjust dB
+    #         # Get the current dBFS (decibels Full Scale)
+    #         current_dBFS = audio_seg.dBFS
+    #         self.SoundStrength = current_dBFS
+    #
+    #         if(current_dBFS > -1):
+    #             # Calculate the gain needed to reach the new dBFS
+    #             gain_needed = self.ToSound_dBFS - current_dBFS
+    #
+    #             # Apply the gain
+    #             modified_audio = audio_seg.apply_gain(gain_needed)
+    #
+    #             self.changelog += f"The base sound strength of {current_dBFS} is adjusted to {modified_audio.dBFS}.\n"
+    #             # 4. Re-attach Audio
+    #             # Replace the audio track with the modified audio (e.g., replace audio with 'modified_audio')
+    #             new_clip = VideoFileClip(self.PATH)
+    #             new_clip.audio = modified_audio
+    #             self.SoundStrength = modified_audio.dBFS
+    #             new_clip.write_videofile(self.PATH)
+    #             new_clip.close()
+    #
+    #         os.unlink(temp_audio_file.name)
+    #     else: # clip is silent
+    #         self.changelog += f"Probable Warning: Clip is siltent.\n"
+
+
     def adjust_video_audio_dB(self):
-        # Google AI-generated function: https://www.google.com/search?q=Is+there+any+way+to+adjust+sound+db+for+several+videos+in+python%3F&sca_esv=3f2684b5ae9554a2&rlz=1C5CHFA_enCA1000CA1000&sxsrf=AE3TifOFtlcJnjJ2wYNrp1OlNLNrpt5uzg%3A1748463084869&ei=7G03aOXjNNDV5NoP7LTOuQE&ved=0ahUKEwjlic7I_MaNAxXQKlkFHWyaMxcQ4dUDCBE&uact=5&oq=Is+there+any+way+to+adjust+sound+db+for+several+videos+in+python%3F&gs_lp=Egxnd3Mtd2l6LXNlcnAiQUlzIHRoZXJlIGFueSB3YXkgdG8gYWRqdXN0IHNvdW5kIGRiIGZvciBzZXZlcmFsIHZpZGVvcyBpbiBweXRob24_SIVIUNgKWK5GcAJ4AZABAJgBygGgAagIqgEFNy4zLjG4AQPIAQD4AQGYAgegApYFwgIKEAAYsAMY1gQYR8ICBRAAGO8FwgIIEAAYgAQYogTCAggQABiiBBiJBZgDAIgGAZAGCJIHBTMuMy4xoAe9HbIHBTEuMy4xuAeLBcIHBTAuMS42yAca&sclient=gws-wiz-serp
-        #
-        """
-        Adjusts the volume of a video's audio track to a specified dB value.
-
-        Args:
-            video_path (str): The path to the video file.
-            new_dB (float): The target decibel level.
-        """
-
-        # 1. Extract Audio
-        # clip = VideoFileClip(video_path)
-        clip = VideoClip(self.PATH)
-        audio = clip.audio
-        clip.close()
-
-        # 2. Load into Pydub
-        audio_seg = AudioSegment.from_file(audio.file_path)
-
-        # 3. Adjust dB
-        # Get the current dBFS (decibels Full Scale)
-        current_dBFS = audio_seg.dBFS
-        self.SoundStrength = current_dBFS
-
-        if(current_dBFS > -1):
-            # Calculate the gain needed to reach the new dBFS
-            gain_needed = self.ToSound_dBFS - current_dBFS
-
-            # Apply the gain
-            modified_audio = audio_seg.apply_gain(gain_needed)
-
-            self.changelog += f"The base sound strength of {current_dBFS} is adjusted to {modified_audio.dBFS}.\n"
-            # 4. Re-attach Audio
-            # Replace the audio track with the modified audio (e.g., replace audio with 'modified_audio')
-            new_clip = VideoClip(self.PATH)
-            new_clip.audio = modified_audio
-            self.SoundStrength = modified_audio.dBFS
-            new_clip.write_videofile(self.PATH)
-            new_clip.close()
+        self.changelog += adjust_volume(self.PATH, self.ToSound_dBFS)
 
 
 
 class VideoInAction:
-
-
     RTMPServerAddress = None
 
     Video = VideoProperty()

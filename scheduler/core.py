@@ -57,7 +57,8 @@ class program_pipeline:
     async def set_run_schedule(self):
         time = self.program_schedule["program_schedule"]["start_time"]
         assert isinstance(time, datetime.time), f"time is not in datetime.time format, it is: {type(time)}"
-        video_file_path = "/Users/earthisgreen/Documents/Programming Space/ُTo publish in Bitbucket or Git hub/GitHub/Non_Profit_Organizations/Noor_Cultural_Center/async-video-scheduler/source/video/body1/1-body_rain.mp4"
+        # video_file_path = "/Users/earthisgreen/Documents/Programming Space/ُTo publish in Bitbucket or Git hub/GitHub/Non_Profit_Organizations/Noor_Cultural_Center/async-video-scheduler/source/video/body1/1-body_rain.mp4"
+        video_file_path = "/Users/earthisgreen/Documents/Programming Space/ُTo publish in Bitbucket or Git hub/GitHub/Non_Profit_Organizations/Noor_Cultural_Center/async-video-scheduler/source/video/body1/02_somna_00_46.mp4"
 
         video = Video(name="rain", path= video_file_path)
         video2styream = VideoInAction(config= self.config, Video = video, PlayingDateTime= time)

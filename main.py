@@ -38,7 +38,7 @@ async def main():
     print("main: awaiting schedule_task")
     await schedule_task
     print("main: awaiting server_task")
-    await server_task
+    # await server_task
     # each time a specific time-frame of the stream is loaded
     # start to play at a certain time with ability to find right time to play in the case of interruption.
 

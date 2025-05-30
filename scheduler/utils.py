@@ -210,3 +210,15 @@ def Either(*validationFuncs):
 
         return False
     return validate
+
+
+import subprocess
+def ffmpegShellRun(ffmpeg_command):
+    process = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    try:
+        out, err = process.communicate()
+        retcode = process.returncode
+    except Exception as e:
+        raise Exception(f"Error in running ffmpeg command over shell: {e}")
+
+    return out, err, retcode
