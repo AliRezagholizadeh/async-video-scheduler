@@ -5,6 +5,8 @@ import subprocess
 # from subprocess import PIPE
 from scheduler.utils import ffmpegShellRun, run_ffmpeg
 from pathlib import Path
+import ffmpeg
+
 
 def adjust_volume(video_path: Path, potTargetdBFS):
     '''
@@ -81,3 +83,17 @@ def adjust_volume(video_path: Path, potTargetdBFS):
 
 
     return message, current_dBFS
+
+
+async def async_to_rtmp_server(video_file_path:Path, rtmp_server_address):
+    try:
+        # out, err = ffmpeg.input(video_file_path, re=None).output(f"rtmp://{self.server_address}:{self.server_port}/live/stream", format='flv', vcodec='libx264').run()
+        process = ffmpeg.input(str(video_file_path)).output(rtmp_server_address, format='flv', vcodec='libx264').run_async(pipe_stdout=True, pipe_stderr=True)
+        # process = ffmpeg.input(video_file_path, ss= "00:00:40").output(f"rtmp://{self.server_address}:{self.server_port}/live/stream", format='flv', vcodec='libx264').run_async(pipe_stdout=True, pipe_stderr=True)
+        # process = ffmpeg.input(video_file_path, re=None).output(f"rtmp://{self.server_address}:{self.server_port}/live/stream", format='flv').run_async(pipe_stdout=True, pipe_stderr=True)
+         # "ffmpeg -i my_test_file.flv -c:v copy -c:a copy -f flv "rtmp://localhost:1935/live/stream
+        print(f"trigger_timely_video: video ({video_file_path}) streamed to the server ..")
+        process.wait()
+        # print(f"trigger_timely_video: Error: {err},\n Out:{out}")
+    except ffmpeg.Error as e:
+        print(f"trigger_timely_video: An error occurred in loading video file to the server: {e}")

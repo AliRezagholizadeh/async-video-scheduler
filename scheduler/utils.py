@@ -201,9 +201,8 @@ async def trigger_watchdog(scheduled_date_time: datetime.datetime, event):
 
 
     while True:
-        if (isinstance(scheduled_date_time, datetime.datetime)):
-            current = datetime.datetime.now
-        elif (isinstance(scheduled_date_time, datetime.time)):
+        current = datetime.datetime.now
+        if (isinstance(scheduled_date_time, datetime.time)):
             current = datetime.datetime.now().time
 
         if(current() >= scheduled_date_time):
@@ -215,9 +214,8 @@ async def trigger_watchdog(scheduled_date_time: datetime.datetime, event):
                 # print(f"trigger_timely_video: Error: {err},\n Out:{out}")
             except Exception as e:
                 print(f"trigger_watchdog: An error occurred in its setting: {e}")
-
         else:
-            print(f"now: {datetime.datetime.now().time()}, scheduled_time: {scheduled_date_time}. So trigger_watchdog is waiting the time arrive.. current:{current()}")
+            print(f"now: {current()}, scheduled_time: {scheduled_date_time}. So trigger_watchdog is waiting the time arrive..")
 
             # await asyncio.sleep((scheduled_date_time - datetime.datetime.now().time()).seconds)
             await asyncio.sleep(0.5)

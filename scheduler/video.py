@@ -2,7 +2,7 @@ from typing import List
 
 from scheduler.utils import ReqPATH, ReqField, DateTimeFormatProperty, ValidTimeFormat, ValidDateTimeFormat, Either
 from scheduler.utils import PlayingDateTimeProperty
-from scheduler.streaming_utils import adjust_volume
+from scheduler.streaming_utils import adjust_volume, async_to_rtmp_server
 from pathlib import Path
 # from datetime import datetime
 import datetime
@@ -271,6 +271,8 @@ class VideoInAction:
         # wait till the date & time arrives
         await self._event.wait()
         print(f"Time to play {self.Video}")
+        task = asyncio.create_task(async_to_rtmp_server(self.Video.PATH, self.RTMPServerAddress))
+        await task
 
 
     @classmethod
