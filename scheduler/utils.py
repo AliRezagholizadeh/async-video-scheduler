@@ -3,17 +3,19 @@ import asyncio
 import datetime
 from itertools import product
 from pathlib import Path
+import subprocess
+
 
 VALID_VIDEO_FORMAT = [".mp4"]
 
-TIME_FORMATS = ["%H:%M:%S:%f", "%H:%M:%S"]
+TIME_FORMATS = ["%H:%M:%S.%f", "%H:%M:%S"]
 DATE_FORMATS = ["%Y-%m-%d"]
 
 
 
 
 
-def ValidTimeFormat(timestr: str):
+def ValidTimeFormat(timestr: str, required = True):
     """
     Parameters:
         value: str format of the time
@@ -23,21 +25,24 @@ def ValidTimeFormat(timestr: str):
     # value should be in TIME_FORMATS format
     # cast str to a predefined valid time format..
     raised_error = ""
+    time = None
     for timeformat in TIME_FORMATS:
         try:
-            time = datetime.datetime.strptime(timestr, timeformat)
+            time = datetime.datetime.strptime(timestr, timeformat).time()
+            # print("timestr: ", timestr, "to time: ", time)
+
             raised_error = ""
             break
         except Exception as e:
             raised_error += f"Video length ({timestr}) should be in {timeformat} format. {e}\n"
             continue
 
-    if (raised_error):
-        raise ValueError(f"Video length ({timestr}) should be in {timeformat} format. {e}")
+    if (required and raised_error):
+        raise ValueError(f"Video length ({timestr}) should be in {timeformat} format.")
 
     return time
 
-def ValidDateTimeFormat(datetimestr: str):
+def ValidDateTimeFormat(datetimestr: str, required = True):
     """
     Parameters:
         value: str format of the time
@@ -47,18 +52,20 @@ def ValidDateTimeFormat(datetimestr: str):
     # value should be in TIME_FORMATS format
     # cast str to a predefined valid time format..
     raised_error = ""
+    datetime = None
     for datetimetup in product(DATE_FORMATS, TIME_FORMATS):
         datetimeformat = f"{datetimetup[0]} {datetimetup[1]}"
         try:
             datetime = datetime.datetime.strptime(datetimestr, datetimeformat)
+            # print("datetimestr: ", datetimestr, "to datetime: ", datetime)
             raised_error = ""
             break
         except Exception as e:
-            raised_error += f"Video length ({datetimestr}) should be in {datetimeformat} format. {e}\n"
+            raised_error += f"Datetime ({datetimestr}) should be in {datetimeformat} format. {e}\n"
             continue
 
-    if (raised_error):
-        raise ValueError(f"Video length ({datetimestr}) should be in {datetimeformat} format. {e}")
+    if (required and raised_error):
+        raise ValueError(f"Datetime ({datetimestr}) should be in a valid {product(DATE_FORMATS, TIME_FORMATS)} format.")
 
     return datetime
 
@@ -123,12 +130,17 @@ class PlayingDateTimeProperty:
 
         return instance.__dict__[self.property_name] or None
 
-    def __set__(self, instance, value, event):
+    # def __set__(self, instance, value, event):
+    def __set__(self, instance, values):
+        # print("values: ", values)
+        assert len(values) == 2, "the value should also contain asyncio.Event() variable."
+        value, event = values
         if not isinstance(value, str):
             raise ValueError(f'The {self.property_name} must be a string')
 
         time_value = self.validfunc(value)
 
+        assert time_value, f"playing time {value} is not recognized."
         # launch timely watchdog with event
         asyncio.create_task(trigger_watchdog(time_value, event))
 
@@ -184,11 +196,19 @@ async def trigger_watchdog(scheduled_date_time: datetime.datetime, event):
     If time arrive, it will out the right timeslot of the video to the local RTMP server ran by the server method.
 
     """
-    while True:
+    if(not isinstance(scheduled_date_time, (datetime.datetime, datetime.time))):
+        raise f"schedule date/time (i.e. {scheduled_date_time}) is not recognized. it's type: {type(scheduled_date_time)}"
 
-        if(datetime.datetime.now().time() >= scheduled_date_time):
+
+    while True:
+        if (isinstance(scheduled_date_time, datetime.datetime)):
+            current = datetime.datetime.now
+        elif (isinstance(scheduled_date_time, datetime.time)):
+            current = datetime.datetime.now().time
+
+        if(current() >= scheduled_date_time):
             #TODO: play the right timeslot of the video
-            print("trigger_watchdog: It's time to set the event.")
+            print(f"trigger_watchdog: It's time to set the event. current: {current()}, scheduled_date_time: {scheduled_date_time}")
             try:
                 event.set()
                 break
@@ -197,24 +217,24 @@ async def trigger_watchdog(scheduled_date_time: datetime.datetime, event):
                 print(f"trigger_watchdog: An error occurred in its setting: {e}")
 
         else:
-            print(f"now: {datetime.datetime.now().time()}, scheduled_time: {scheduled_date_time}. So trigger_watchdog is waiting the time arrive..")
+            print(f"now: {datetime.datetime.now().time()}, scheduled_time: {scheduled_date_time}. So trigger_watchdog is waiting the time arrive.. current:{current()}")
 
-            await asyncio.sleep(await asyncio.sleep((scheduled_date_time - datetime.datetime.now().time()).seconds))
+            # await asyncio.sleep((scheduled_date_time - datetime.datetime.now().time()).seconds)
+            await asyncio.sleep(0.5)
 
 
 def Either(*validationFuncs):
     def validate(value):
         for validfunc in validationFuncs:
-            if((result:=validfunc(value))):
+            if((result:=validfunc(value, required = False))):
                 return result
 
         return False
     return validate
 
 
-import subprocess
 def ffmpegShellRun(ffmpeg_command):
-    process = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    process = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         out, err = process.communicate()
         retcode = process.returncode
@@ -222,3 +242,14 @@ def ffmpegShellRun(ffmpeg_command):
         raise Exception(f"Error in running ffmpeg command over shell: {e}")
 
     return out, err, retcode
+
+def run_ffmpeg(command_list):
+    try:
+        result = subprocess.run(
+            command_list,
+            stderr=subprocess.PIPE,
+            # check=True
+        )
+        return result.stderr.decode(), 0  # returning stderr and success code
+    except subprocess.CalledProcessError as e:
+        return e.stderr.decode(), e.returncode

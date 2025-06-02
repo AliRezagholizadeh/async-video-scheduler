@@ -66,7 +66,7 @@ class program_pipeline:
 
         # task = asyncio.create_task(self.trigger_timely_video(time, video_file_path))
         task = asyncio.create_task(video2styream.stream())
-        print(f"trigger_timely_video called to be ran at {time} for {Path(video_file_path).parents[-3:]}")
+        print(f"trigger_timely_video called to be ran at {time} for {video_file_path}")
         await task
 
     # async def trigger_timely_video(self, scheduled_time: datetime.time, video_file_path:str):

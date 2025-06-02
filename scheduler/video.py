@@ -54,10 +54,10 @@ class VideoInActionProperty:
         return instance.__dict__[self.property_name] or None
 
     def __set__(self, instance, value):
-        if not isinstance(value, VideoInAction):
-            raise ValueError(f'The {self.property_name} must be a VideoInAction')
-        if(not value):
-            raise ValueError(f'The {self.property_name} cannot be empty')
+        if(value):
+            if not isinstance(value, VideoInAction):
+                raise ValueError(f'The {self.property_name} must be a VideoInAction')
+
 
         instance.__dict__[self.property_name] = value
 
@@ -73,6 +73,7 @@ class Video:
     ToSound_dBFS = -14
     def __init__(self, name: str, path: str):
         # video properties
+        print(f"Video '{name}' {('=')*40}")
         self.PATH = path
         self.Name = name
         self._Resolution = None
@@ -83,9 +84,7 @@ class Video:
 
 
         self.adjust_video_audio_dB()
-        print("passed adjust_video_audio_dB")
         self.get_videoInfo()
-        print("passed get_videoInfo")
 
         print(self)
 
@@ -113,6 +112,8 @@ class Video:
         return self._Length
     @property
     def Resolution(self):
+        if (not self._Resolution):
+            raise ValueError("Video resolution is not recognized.")
         return self._Resolution
 
     @property
@@ -128,15 +129,14 @@ class Video:
             cls.ToSound_dBFS = value
 
     def __str__(self):
-        return f"{('-')*20} \n" \
-               f"{self.Name} Video Info:" \
-               f" ----> Name: {self.Name}"\
-               f" ----> Length: {self.Length}"\
-               f" ----> Resolution: {self.Resolution}"\
-               f" ----> Sound Strength: .... "\
-               f" ----> PATH: {self.PATH}" \
-               f" ----> changelog: {self.changelog}" \
-               f"{('-') * 20} \n"
+        return f"\n{self.Name} Video Info:" \
+               f"\n ----> Name: {self.Name}"\
+               f"\n ----> Length: {self.Length}"\
+               f"\n ----> Resolution: {self.Resolution}"\
+               f"\n ----> Sound Strength: {self.SoundStrength} "\
+               f"\n ----> PATH: {self.PATH}" \
+               f"\n ----> changelog: {self.changelog}" \
+               f"\n{('-') * 40} \n"
 
 
     # def set_properties(self, Name = None, Length = None, Resolution = None, VoiceStrength = None, PATH = None):
@@ -150,13 +150,19 @@ class Video:
 
     def get_videoInfo(self):
 
-        video = cv2.VideoCapture(self.PATH)
+        video = cv2.VideoCapture(str(self.PATH))
 
-        self._Length = video.get(cv2.CAP_PROP_POS_MSEC)
-        self._FPS = video.get(cv2.CAP_PROP_FRAME_COUNT)
+        # self._Length = video.get(cv2.CAP_PROP_POS_MSEC)
+        self._FPS = video.get(cv2.CAP_PROP_FPS)
         width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self._Resolution = f"{height}x{width}"
+        frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
+        # calculate duration of the video
+        seconds = frames / self._FPS
+        video_time = datetime.timedelta(seconds=seconds)
+        self._Length = video_time
+        print(f"video info fetched using cv2: length: {self._Length}, fps: {self._FPS}, res: {self._Resolution}, frames: {frames}, second: {seconds}")
 
 
 
@@ -210,7 +216,8 @@ class Video:
 
 
     def adjust_video_audio_dB(self):
-        self.changelog += adjust_volume(self.PATH, self.ToSound_dBFS)
+        changelog, self._SoundStrength = adjust_volume(self.PATH, self.ToSound_dBFS)
+        self.changelog += changelog
 
 
 
@@ -260,7 +267,7 @@ class VideoInAction:
 
     async def stream(self):
         # set PlayingDateTime class variable to trigger a watchdog
-        self.PlayingDateTime = self._PlayingDateTime, self._event
+        self.PlayingDateTime = str(self._PlayingDateTime), self._event
         # wait till the date & time arrives
         await self._event.wait()
         print(f"Time to play {self.Video}")
