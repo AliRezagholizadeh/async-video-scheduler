@@ -6,7 +6,31 @@ import subprocess
 from scheduler.utils import ffmpegShellRun, run_ffmpeg
 from pathlib import Path
 import ffmpeg
+import asyncio
 
+STREAM_PROFILES = {
+    "low": {
+        "resolution": "854x480",
+        "fps": 25,
+        "bitrate": "700k",
+        "maxrate": "700k",
+        "bufsize": "1400k"
+    },
+    "medium": {
+        "resolution": "1280x720",
+        "fps": 30,
+        "bitrate": "1500k",
+        "maxrate": "1500k",
+        "bufsize": "3000k"
+    },
+    "high": {
+        "resolution": "1920x1080",
+        "fps": 30,
+        "bitrate": "3000k",
+        "maxrate": "3000k",
+        "bufsize": "6000k"
+    }
+}
 
 def adjust_volume(video_path: Path, potTargetdBFS):
     '''
@@ -88,12 +112,131 @@ def adjust_volume(video_path: Path, potTargetdBFS):
 async def async_to_rtmp_server(video_file_path:Path, rtmp_server_address):
     try:
         # out, err = ffmpeg.input(video_file_path, re=None).output(f"rtmp://{self.server_address}:{self.server_port}/live/stream", format='flv', vcodec='libx264').run()
-        process = ffmpeg.input(str(video_file_path)).output(rtmp_server_address, format='flv', vcodec='libx264').run_async(pipe_stdout=True, pipe_stderr=True)
+        # process = ffmpeg.input('anullsrc=channel_layout=stereo:sample_rate=44100', f='lavfi').input(str(video_file_path), re= None).output(rtmp_server_address, format='flv', vcodec='libx264').run_async(pipe_stdout=True, pipe_stderr=True)
+        # process = ffmpeg.input('anullsrc=channel_layout=stereo:sample_rate=44100', f='lavfi')\
+        #     .input(str(video_file_path), re= None)\
+        #     .output(rtmp_server_address, format='flv', vcodec='libx264', c_v='copy', c_a='aac', shortest=None,)\
+        #     .run_async(pipe_stdout=True, pipe_stderr=True)
+
+        video_input = ffmpeg.input(str(video_file_path), **{'re': None})
+        silent_audio = ffmpeg.input('anullsrc=channel_layout=stereo:sample_rate=44100', f='lavfi')
+
+        # (
+        process = ffmpeg.output(
+            silent_audio, video_input,
+            rtmp_server_address,
+            format='flv',
+            vcodec='libx264',
+            # c_v='copy',
+            # acodec='aac',
+            # shortest=None
+        ).run_async(pipe_stdout=True, pipe_stderr=True)
+        # )
+        # input_stream = ffmpeg.input(str(video_file_path))
+        # process = input_stream.global_args('-re').output(rtmp_server_address, format='flv', vcodec='libx264').run_async(pipe_stdout=True, pipe_stderr=True)
+        # process = ffmpeg.input("anullsrc=channel_layout=stereo:sample_rate=44100", str(video_file_path), "-re").output(rtmp_server_address, format='flv', vcodec='libx264').run_async(pipe_stdout=True, pipe_stderr=True)
         # process = ffmpeg.input(video_file_path, ss= "00:00:40").output(f"rtmp://{self.server_address}:{self.server_port}/live/stream", format='flv', vcodec='libx264').run_async(pipe_stdout=True, pipe_stderr=True)
         # process = ffmpeg.input(video_file_path, re=None).output(f"rtmp://{self.server_address}:{self.server_port}/live/stream", format='flv').run_async(pipe_stdout=True, pipe_stderr=True)
          # "ffmpeg -i my_test_file.flv -c:v copy -c:a copy -f flv "rtmp://localhost:1935/live/stream
-        print(f"trigger_timely_video: video ({video_file_path}) streamed to the server ..")
         process.wait()
+        print(f"trigger_timely_video: video ({video_file_path}) streamed to the server ..")
+
         # print(f"trigger_timely_video: Error: {err},\n Out:{out}")
     except ffmpeg.Error as e:
         print(f"trigger_timely_video: An error occurred in loading video file to the server: {e}")
+
+async def stream_to_rtmp_async_(video_file_path:Path, rtmp_server_address):
+    process = await asyncio.create_subprocess_exec(
+        "ffmpeg",
+        "-re",
+        "-i", str(video_file_path),
+        "-vf", "tpad=stop_mode=clone:stop_duration=5",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-tune", "zerolatency",
+        "-c:a", "copy",
+        "-ar", "44100",
+        "-b:a", "128k",
+        "-f", "flv",
+        rtmp_server_address,
+        stdout = asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE
+    )
+
+    # Stream logs from FFmpeg in real time (optional)
+    async for line in process.stderr:
+        print(line.decode().strip())
+
+    return await process.wait()
+
+async def stream_to_rtmp_async(video_file_path:Path, rtmp_server_address, profile = "medium"):
+    # ffmpeg command with consideration of 10 seconds OBS DELAY to connect
+    settings = STREAM_PROFILES[profile]
+    width, height = settings["resolution"].split("x")
+    fps = str(settings["fps"])
+    fps = "25"
+    # ratio = 1.7
+
+    process = await asyncio.create_subprocess_exec(
+        "ffmpeg",
+        "-re",
+        "-f", "lavfi",
+        "-i", f"color=color=black:s={settings['resolution']}:r={fps}:d=5",
+        "-i", str(video_file_path),
+        "-filter_complex",
+        # f"[1:v]scale={width}:{height},fps={fps},format=yuv420p,setsar=1[v1];"
+        f"[1:v]scale={width}:{height}, fps={fps},format=yuv420p,setsar=1,tpad=stop_mode=clone:stop_duration=10[v1]; [0:v][v1]concat=n=2:v=1:a=0[outv]",
+        # f"[1:v]scale={width}:{int(int(width)/ratio)},fps={fps},format=yuv420p;"
+        # f"[0:v][v1]concat=n=2:v=1:a=0[outv]",
+        "-map", "[outv]",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-tune", "zerolatency",
+        "-b:v", settings["bitrate"],
+        "-maxrate", settings["maxrate"],
+        "-bufsize", settings["bufsize"],
+        "-r", fps,
+        "-g", str(int(fps) * 2),
+        "-keyint_min", fps,
+        "-sc_threshold", "0",
+        "-threads", "1",
+        "-f", "flv",
+        rtmp_server_address,
+        stdout = asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE
+    )
+
+
+
+    await process.wait()
+    # Stream logs from FFmpeg in real time (optional)
+    async for line in process.stderr:
+        print(line.decode().strip())
+
+
+async def stream_with_silent_audio_async(input_path, rtmp_url):
+    process = await asyncio.create_subprocess_exec(
+        "ffmpeg",
+        "-re",
+        "-f", "lavfi",
+        "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+        "-i", str(input_path),
+        "-shortest",
+        "-c:v", "copy",
+        "-c:a", "copy",
+        # "-map", "1:v:0",    # use video from 2nd input (input_path)
+        # "-map", "1:a:0?",   # use audio from 2nd input if present
+        # "-map", "0:a:0",    # fallback to silent audio (anullsrc)
+        # "-filter_complex", "[1:a:0][0:a:0]amix=inputs=2:duration=first:dropout_transition=2[aout]",
+        # "-map", "[aout]",   # use the mixed audio output
+        "-f", "flv",
+        rtmp_url,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE
+    )
+
+    # Stream logs from FFmpeg in real time (optional)
+    async for line in process.stderr:
+        print(line.decode().strip())
+
+    return await process.wait()

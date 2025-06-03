@@ -1,8 +1,8 @@
 from typing import List
 
 from scheduler.utils import ReqPATH, ReqField, DateTimeFormatProperty, ValidTimeFormat, ValidDateTimeFormat, Either
-from scheduler.utils import PlayingDateTimeProperty
-from scheduler.streaming_utils import adjust_volume, async_to_rtmp_server
+from scheduler.utils import PlayingDateTimeProperty, TIME_FORMATS
+from scheduler.streaming_utils import adjust_volume, async_to_rtmp_server, stream_to_rtmp_async, stream_with_silent_audio_async
 from pathlib import Path
 # from datetime import datetime
 import datetime
@@ -156,7 +156,7 @@ class Video:
         self._FPS = video.get(cv2.CAP_PROP_FPS)
         width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self._Resolution = f"{height}x{width}"
+        self._Resolution = f"{width}x{height}"
         frames = video.get(cv2.CAP_PROP_FRAME_COUNT)
         # calculate duration of the video
         seconds = frames / self._FPS
@@ -271,10 +271,31 @@ class VideoInAction:
         # wait till the date & time arrives
         await self._event.wait()
         print(f"Time to play {self.Video}")
-        task = asyncio.create_task(async_to_rtmp_server(self.Video.PATH, self.RTMPServerAddress))
+        # task = asyncio.create_task(async_to_rtmp_server(self.Video.PATH, self.RTMPServerAddress))
+        task = asyncio.create_task(stream_to_rtmp_async(self.Video.PATH, self.RTMPServerAddress))
+        # task = asyncio.create_task(stream_with_silent_audio_async(self.Video.PATH, self.RTMPServerAddress))
+        print("to set timer for playback:")
+        play_termination_e = asyncio.Event()
+        timer_task = asyncio.create_task(self.timer(play_termination_e))
+
         await task
 
+        play_termination_e.set()
+        print(f"streaming {self.Video.Name} finished..")
+        await timer_task
 
+    async def timer(self, event: asyncio.Event):
+        start_time = datetime.datetime.now()
+        base_datetime = datetime.datetime(year=start_time.year, month= start_time.month, day= start_time.day)
+
+        while(not event.is_set()):
+            current_t = datetime.datetime.now()
+            passed = (base_datetime + (current_t - start_time)).time().strftime(TIME_FORMATS[1])
+            print(f"\rNow: {str(current_t)} - Passed: {passed}", end="")
+            # print('\r Now: [%s%]' % current_t, '\r passed [%s%%]' % passed, end="")
+            await asyncio.sleep(0.1)
+
+        print("\n")
     @classmethod
     def setServerAddress(cls, address, port, tail):
         if(cls.RTMPServerAddress == None):
