@@ -286,6 +286,11 @@ class VideoInAction:
         print(f"streaming {self.Video.Name} finished..")
         await timer_task
 
+        if(self.NextVideo):
+            next_stream_task = asyncio.create_task(self.NextVideo.stream())
+
+            await next_stream_task
+
     async def timer(self, event: asyncio.Event):
         start_time = datetime.datetime.now()
         base_datetime = datetime.datetime(year=start_time.year, month= start_time.month, day= start_time.day)

@@ -1,3 +1,5 @@
+import re
+
 from scheduler.video import Video, VideoInAction
 import asyncio
 from typing import Dict
@@ -58,15 +60,55 @@ class program_pipeline:
         time = self.program_schedule["program_schedule"]["start_time"]
         assert isinstance(time, datetime.time), f"time is not in datetime.time format, it is: {type(time)}"
         # video_file_path = "/Users/earthisgreen/Documents/Programming Space/ُTo publish in Bitbucket or Git hub/GitHub/Non_Profit_Organizations/Noor_Cultural_Center/async-video-scheduler/source/video/body1/1-body_rain.mp4"
-        video_file_path = "/Users/earthisgreen/Documents/Programming Space/ُTo publish in Bitbucket or Git hub/GitHub/Non_Profit_Organizations/Noor_Cultural_Center/async-video-scheduler/source/video/body1/02_somna_00_46.mp4"
+        video_file_path = Path("/Users/earthisgreen/Documents/Programming Space/ُTo publish in Bitbucket or Git hub/GitHub/Non_Profit_Organizations/Noor_Cultural_Center/async-video-scheduler/source/video/body1/02_somna_00_46.mp4")
 
-        video = Video(name="rain", path= video_file_path)
-        video2styream = VideoInAction(config= self.config, Video = video, PlayingDateTime= time)
-        # video2styream.stream()
+        root_videoInAct = None
+        if(video_file_path.is_file()):  # single scheduled video
+            # making video object of current video tuple
+            video = Video(name="rain", path= str(video_file_path))
+            # making video in action object of current video obj
+            root_videoInAct = VideoInAction(config= self.config, Video = video, PlayingDateTime= time)
 
-        # task = asyncio.create_task(self.trigger_timely_video(time, video_file_path))
-        task = asyncio.create_task(video2styream.stream())
-        print(f"trigger_timely_video called to be ran at {time} for {video_file_path}")
+        elif(video_file_path.is_dir()): # multiple scheduled videos
+            video_file_list = []
+            for child_file in video_file_path.iterdir():
+                name = child_file.name
+                format = child_file.suffix
+                if(format not in self.config["Video_format"]):
+                    continue
+
+                # list names in with certain pattern: ex. 02_video_name
+                m = re.findall(r"\b\d+-*[\w-]*", name)
+                if(m): # match
+                    video_file_list.append((child_file, m[0], format))
+            # sort video based on the initial number
+            video_file_list = sorted(video_file_list, key=lambda x: int(re.findall(r"^\d+", x[1])[0]))
+
+            # create Video and nested VideoInAction objects
+            video_inAct_obj = None
+            for video_indx in range(len(video_file_list)):
+                # making video object of current video tuple
+                v_tup = video_file_list[video_indx]
+                # making video in action object of current video obj
+                video_obj = Video(name=v_tup[1], path=v_tup[0])
+
+                prev_videoInAct = video_inAct_obj
+
+                if (video_inAct_obj): # after the first iteration
+                    v_inAct_obj = VideoInAction(Video=video_obj, PreviousVideo=prev_videoInAct, config=self.config)
+                    video_inAct_obj.NextVideo = v_inAct_obj
+                else: # at first iteration
+                    v_inAct_obj = VideoInAction(Video=video_obj, PreviousVideo=prev_videoInAct, config=self.config, PlayingDateTime= time)
+                    root_videoInAct = v_inAct_obj
+
+                video_inAct_obj = v_inAct_obj
+
+
+        else: # not recognized
+            raise ValueError("Video file path is not reffering to a file or a dir.")
+
+        task = asyncio.create_task(root_videoInAct.stream())
+        print(f"trigger_timely_video called to be ran at {time} for {str(video_file_path)}")
         await task
 
     # async def trigger_timely_video(self, scheduled_time: datetime.time, video_file_path:str):
