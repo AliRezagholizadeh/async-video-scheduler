@@ -176,42 +176,173 @@ async def stream_to_rtmp_async(video_file_path:Path, rtmp_server_address, profil
     fps = str(settings["fps"])
     fps = "25"
     # ratio = 1.7
-
-    process = await asyncio.create_subprocess_exec(
+    ffmpeg_cmd = [
         "ffmpeg",
         "-re",
+        "-copyts",
+        "-start_at_zero",
         "-f", "lavfi",
-        "-i", f"color=color=black:s={settings['resolution']}:r={fps}:d=5",
+        "-i", "color=color=black:s=1280x720:r=30:d=5",  # 5s preroll
         "-i", str(video_file_path),
         "-filter_complex",
-        # f"[1:v]scale={width}:{height},fps={fps},format=yuv420p,setsar=1[v1];"
-        f"[1:v]scale={width}:{height}, fps={fps},format=yuv420p,setsar=1,tpad=stop_mode=clone:stop_duration=10[v1]; [0:v][v1]concat=n=2:v=1:a=0[outv]",
-        # f"[1:v]scale={width}:{int(int(width)/ratio)},fps={fps},format=yuv420p;"
-        # f"[0:v][v1]concat=n=2:v=1:a=0[outv]",
+        "[1:v]scale=1280:720,fps=30,format=yuv420p,setsar=1,"
+        "tpad=stop_mode=clone:stop_duration=10[v1];"
+        "[0:v][v1]concat=n=2:v=1:a=0[outv]",
         "-map", "[outv]",
+        "-map", "1:a?",  # optional audio stream
         "-c:v", "libx264",
         "-preset", "veryfast",
         "-tune", "zerolatency",
-        "-b:v", settings["bitrate"],
-        "-maxrate", settings["maxrate"],
-        "-bufsize", settings["bufsize"],
-        "-r", fps,
-        "-g", str(int(fps) * 2),
-        "-keyint_min", fps,
+        "-b:v", "1500k",
+        "-maxrate", "1500k",
+        "-bufsize", "3000k",
+        "-c:a", "aac",
+        "-ar", "44100",
+        "-b:a", "128k",
+        "-r", "30",
+        "-g", "60",
+        "-keyint_min", "30",
         "-sc_threshold", "0",
         "-threads", "1",
+        "-muxdelay", "0.5",
         "-f", "flv",
         rtmp_server_address,
-        stdout = asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.PIPE
-    )
-
-
+    ]
+    process = await asyncio.create_subprocess_exec(*ffmpeg_cmd, stdout = asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE)
+    # process = await asyncio.create_subprocess_exec(
+    #     "ffmpeg",
+    #     "-re",
+    #     "-f", "lavfi",
+    #     "-i", f"color=color=black:s={settings['resolution']}:r={fps}:d=5",
+    #     "-i", str(video_file_path),
+    #     "-filter_complex",
+    #     # f"[1:v]scale={width}:{height},fps={fps},format=yuv420p,setsar=1[v1];"
+    #     f"[1:v]scale={width}:{height}, fps={fps},format=yuv420p,setsar=1,tpad=stop_mode=clone:stop_duration=10[v1]; [0:v][v1]concat=n=2:v=1:a=0[outv]",
+    #     # f"[1:v]scale={width}:{int(int(width)/ratio)},fps={fps},format=yuv420p;"
+    #     # f"[0:v][v1]concat=n=2:v=1:a=0[outv]",
+    #     "-map", "[outv]",
+    #     "-c:v", "libx264",
+    #     "-preset", "veryfast",
+    #     "-tune", "zerolatency",
+    #     "-b:v", settings["bitrate"],
+    #     "-maxrate", settings["maxrate"],
+    #     "-bufsize", settings["bufsize"],
+    #     "-r", fps,
+    #     "-g", str(int(fps) * 2),
+    #     "-keyint_min", fps,
+    #     "-sc_threshold", "0",
+    #     "-threads", "1",
+    #     "-f", "flv",
+    #     # rtmp_server_address,
+    #     f"{video_file_path.parents[0]}/output.flv",
+    #     stdout = asyncio.subprocess.DEVNULL,
+    #     stderr=asyncio.subprocess.PIPE
+    # )
 
     await process.wait()
     # Stream logs from FFmpeg in real time (optional)
     async for line in process.stderr:
         print(line.decode().strip())
+
+
+
+async def twoStage_stream_real_time_pipeline(video_file_path:Path, rtmp_server_address):
+    first_ffmpeg_cmd = [
+        "ffmpeg",
+        "-i", str(video_file_path),
+        "-f", "mpegts",
+        # "-filter_complex", "[0:v]scale=1280:720,fps=30,format=yuv420p[v];setsar=1[v1]",
+        "-filter_complex", "[0:v]scale=1280:720,format=yuv420p[v]",
+        "-map", "[v]",
+        "-map", "0:a",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-b:v", "1500k",
+        "-f", "flv",
+        "pipe:1",
+    ]
+    first_ffmpeg_cmd = [
+        "ffmpeg",
+        "-re",
+        "-copyts",
+        "-start_at_zero",
+        "-f", "lavfi",
+        "-i", "color=color=black:s=1280x720:r=30:d=5",  # 5s preroll
+        "-i", str(video_file_path),
+        "-filter_complex",
+        "[1:v]scale=1280:720,fps=30,format=yuv420p,setsar=1,"
+        "tpad=stop_mode=clone:stop_duration=10[v1];"
+        "[0:v][v1]concat=n=2:v=1:a=0[outv]",
+        "-map", "[outv]",
+        "-map", "1:a?",  # optional audio stream
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-tune", "zerolatency",
+        "-b:v", "1500k",
+        "-maxrate", "1500k",
+        "-bufsize", "3000k",
+        "-c:a", "aac",
+        "-ar", "44100",
+        "-b:a", "128k",
+        "-r", "30",
+        "-g", "60",
+        "-keyint_min", "30",
+        "-sc_threshold", "0",
+        "-threads", "1",
+        "-muxdelay", "0.5",
+        "-f", "flv",
+        "pipe:1",
+    ]
+    first = await asyncio.create_task(asyncio.create_subprocess_exec(
+        *first_ffmpeg_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    ))
+
+    second = await asyncio.create_task(asyncio.create_subprocess_exec(
+        "ffmpeg",
+        "-re",
+        "-i", "pipe:0",
+        "-c", "copy",
+        "-f", "flv",
+        rtmp_server_address,
+        stdin=asyncio.subprocess.PIPE,
+        # stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    ))
+
+    async def pipe_output(input_stream, output_stream):
+        while True:
+            chunk = await input_stream.read(4096)
+            if not chunk:
+                output_stream.write_eof()
+                break
+            output_stream.write(chunk)
+            await output_stream.drain()
+    # Optionally print logs
+    async def log_stream(stream, name):
+        async for line in stream:
+            print(f"{name}: {line.decode().strip()}")
+
+    try:
+        await asyncio.gather(
+            pipe_output(first.stdout, second.stdin),
+            log_stream(first.stderr, "ENCODE"),
+            log_stream(second.stderr, "STREAM"),
+            first.wait(),
+            second.wait()
+        )
+    finally:
+        if first.returncode is None:
+            first.terminate()
+        if second.returncode is None:
+            second.terminate()
+        await asyncio.gather(
+            first.wait(),
+            second.wait()
+        )
+
 
 
 async def stream_with_silent_audio_async(input_path, rtmp_url):

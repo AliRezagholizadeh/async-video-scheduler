@@ -2,7 +2,8 @@ from typing import List
 
 from scheduler.utils import ReqPATH, ReqField, DateTimeFormatProperty, ValidTimeFormat, ValidDateTimeFormat, Either
 from scheduler.utils import PlayingDateTimeProperty, TIME_FORMATS
-from scheduler.streaming_utils import adjust_volume, async_to_rtmp_server, stream_to_rtmp_async, stream_with_silent_audio_async
+from scheduler.streaming_utils import adjust_volume, async_to_rtmp_server, \
+    stream_to_rtmp_async, stream_with_silent_audio_async, twoStage_stream_real_time_pipeline
 from pathlib import Path
 # from datetime import datetime
 import datetime
@@ -272,7 +273,8 @@ class VideoInAction:
         await self._event.wait()
         print(f"Time to play {self.Video}")
         # task = asyncio.create_task(async_to_rtmp_server(self.Video.PATH, self.RTMPServerAddress))
-        task = asyncio.create_task(stream_to_rtmp_async(self.Video.PATH, self.RTMPServerAddress))
+        # task = asyncio.create_task(stream_to_rtmp_async(self.Video.PATH, self.RTMPServerAddress))
+        task = asyncio.create_task(twoStage_stream_real_time_pipeline(self.Video.PATH, self.RTMPServerAddress))
         # task = asyncio.create_task(stream_with_silent_audio_async(self.Video.PATH, self.RTMPServerAddress))
         print("to set timer for playback:")
         play_termination_e = asyncio.Event()
@@ -291,7 +293,7 @@ class VideoInAction:
         while(not event.is_set()):
             current_t = datetime.datetime.now()
             passed = (base_datetime + (current_t - start_time)).time().strftime(TIME_FORMATS[1])
-            print(f"\rNow: {str(current_t)} - Passed: {passed}", end="")
+            print(f"\rstarted: {str(start_time)} - Passed: {passed}", end="")
             # print('\r Now: [%s%]' % current_t, '\r passed [%s%%]' % passed, end="")
             await asyncio.sleep(0.1)
 
