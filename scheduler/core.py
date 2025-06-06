@@ -39,39 +39,26 @@ class program_pipeline:
         self.server_port = "1935"
         self.server_stream_protocol = "rtmp"
 
-    # async def run_server(self):
-    #     """
-    #     launch a RTMP serve to listen on coming stream and will emmit it over predefined options, like:
-    #     - playback
-    #
-    #     """
-    #
-    #     # server = SimpleServer()
-    #     # await server.create(host=self.server_address, port=self.server_port)
-    #     # await server.start()
-    #     self.server_available_bool = True
-    #
-    #     # await server.wait_closed()
-    #     print("server closed ..")
-
-
 
     async def set_run_schedule(self):
         time = self.program_schedule["program_schedule"]["start_time"]
         assert isinstance(time, datetime.time), f"time is not in datetime.time format, it is: {type(time)}"
         # video_file_path = "/Users/earthisgreen/Documents/Programming Space/ُTo publish in Bitbucket or Git hub/GitHub/Non_Profit_Organizations/Noor_Cultural_Center/async-video-scheduler/source/video/body1/1-body_rain.mp4"
-        video_file_path = Path("/Users/earthisgreen/Documents/Programming Space/ُTo publish in Bitbucket or Git hub/GitHub/Non_Profit_Organizations/Noor_Cultural_Center/async-video-scheduler/source/video/body1/02_somna_00_46.mp4")
+        # video_file_path = Path("/Users/earthisgreen/Documents/Programming Space/ُTo publish in Bitbucket or Git hub/GitHub/Non_Profit_Organizations/Noor_Cultural_Center/async-video-scheduler/source/video/body1/02_somna_00_46.mp4")
+        video_dir_path = Path("/Users/earthisgreen/Documents/Programming Space/ُTo publish in Bitbucket or Git hub/GitHub/Non_Profit_Organizations/Noor_Cultural_Center/async-video-scheduler/source/video/body1/")
 
+        # path_ = video_file_path
+        path_ = video_dir_path
         root_videoInAct = None
-        if(video_file_path.is_file()):  # single scheduled video
+        if(path_.is_file()):  # single scheduled video
             # making video object of current video tuple
-            video = Video(name="rain", path= str(video_file_path))
+            video = Video(name="rain", path= str(path_))
             # making video in action object of current video obj
             root_videoInAct = VideoInAction(config= self.config, Video = video, PlayingDateTime= time)
 
-        elif(video_file_path.is_dir()): # multiple scheduled videos
+        elif(path_.is_dir()): # multiple scheduled videos
             video_file_list = []
-            for child_file in video_file_path.iterdir():
+            for child_file in path_.iterdir():
                 name = child_file.name
                 format = child_file.suffix
                 if(format not in self.config["Video_format"]):
@@ -90,7 +77,7 @@ class program_pipeline:
                 # making video object of current video tuple
                 v_tup = video_file_list[video_indx]
                 # making video in action object of current video obj
-                video_obj = Video(name=v_tup[1], path=v_tup[0])
+                video_obj = Video(name=v_tup[1], path= str(v_tup[0]))
 
                 prev_videoInAct = video_inAct_obj
 
@@ -107,8 +94,9 @@ class program_pipeline:
         else: # not recognized
             raise ValueError("Video file path is not reffering to a file or a dir.")
 
-        task = asyncio.create_task(root_videoInAct.stream())
-        print(f"trigger_timely_video called to be ran at {time} for {str(video_file_path)}")
+        print(f"From Core (program_pipeline) \nroot_videoInAct: {root_videoInAct}")
+        task = asyncio.create_task(root_videoInAct.on_time_stream())
+        print(f"trigger_timely_video called to be ran at {time} for {str(path_)}")
         await task
 
     # async def trigger_timely_video(self, scheduled_time: datetime.time, video_file_path:str):

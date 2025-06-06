@@ -266,7 +266,8 @@ class VideoInAction:
 
 
 
-    async def stream(self):
+    async def on_time_stream(self):
+        assert self._PlayingDateTime, "Playing date/time should be set first."
         # set PlayingDateTime class variable to trigger a watchdog
         self.PlayingDateTime = str(self._PlayingDateTime), self._event
         # wait till the date & time arrives
@@ -274,11 +275,25 @@ class VideoInAction:
         print(f"Time to play {self.Video}")
         # task = asyncio.create_task(async_to_rtmp_server(self.Video.PATH, self.RTMPServerAddress))
         # task = asyncio.create_task(stream_to_rtmp_async(self.Video.PATH, self.RTMPServerAddress))
-        task = asyncio.create_task(twoStage_stream_real_time_pipeline(self.Video.PATH, self.RTMPServerAddress))
+        stream_started_signal = asyncio.Event()
+        if(self.NextVideo): # no post_time
+            task = asyncio.create_task(
+                twoStage_stream_real_time_pipeline(
+                self.Video.PATH, self.RTMPServerAddress,
+                pre_time = "10", stream_started_signal = stream_started_signal
+                )
+            )
+        else: # # consider post_time to let server drains the pipe
+            task = asyncio.create_task(
+                twoStage_stream_real_time_pipeline(
+                    self.Video.PATH, self.RTMPServerAddress,
+                    pre_time = "10", post_time = "10", stream_started_signal = stream_started_signal
+                )
+            )
         # task = asyncio.create_task(stream_with_silent_audio_async(self.Video.PATH, self.RTMPServerAddress))
         print("to set timer for playback:")
         play_termination_e = asyncio.Event()
-        timer_task = asyncio.create_task(self.timer(play_termination_e))
+        timer_task = asyncio.create_task(self.timer(stream_started_signal, play_termination_e))
 
         await task
 
@@ -287,15 +302,49 @@ class VideoInAction:
         await timer_task
 
         if(self.NextVideo):
-            next_stream_task = asyncio.create_task(self.NextVideo.stream())
+            next_stream_task = asyncio.create_task(self.NextVideo.stream_next())
 
             await next_stream_task
 
-    async def timer(self, event: asyncio.Event):
+    async def stream_next(self):
+
+        stream_started_signal = asyncio.Event()
+        if (self.NextVideo):  # no post_time
+            task = asyncio.create_task(
+                twoStage_stream_real_time_pipeline(
+                    self.Video.PATH, self.RTMPServerAddress, stream_started_signal = stream_started_signal
+                )
+            )
+        else:  # # consider post_time to let server drains the pipe
+            task = asyncio.create_task(
+                twoStage_stream_real_time_pipeline(
+                    self.Video.PATH, self.RTMPServerAddress, post_time="10", stream_started_signal = stream_started_signal
+                )
+            )        # task = asyncio.create_task(stream_with_silent_audio_async(self.Video.PATH, self.RTMPServerAddress))
+
+        print(f"Tow stage ffmpeg stream is set for {self.Video.Name}.\n Plybeck timer:")
+        play_termination_e = asyncio.Event()
+        timer_task = asyncio.create_task(self.timer(stream_started_signal, play_termination_e))
+
+        await task
+
+        play_termination_e.set()
+        print(f"{self.Video.Name} streaming finished..")
+        await timer_task
+
+        if(self.NextVideo):
+            print("next video is going to be started soon.")
+            next_stream_task = asyncio.create_task(self.NextVideo.stream_next())
+
+            await next_stream_task
+
+    async def timer(self, stream_started_signal: asyncio.Event, stream_finished_event: asyncio.Event):
+
+        await stream_started_signal.wait()
         start_time = datetime.datetime.now()
         base_datetime = datetime.datetime(year=start_time.year, month= start_time.month, day= start_time.day)
 
-        while(not event.is_set()):
+        while(not stream_finished_event.is_set()):
             current_t = datetime.datetime.now()
             passed = (base_datetime + (current_t - start_time)).time().strftime(TIME_FORMATS[1])
             print(f"\rstarted: {str(start_time)} - Passed: {passed}", end="")
@@ -347,6 +396,15 @@ class VideoInAction:
         pass
     def stop(self):
         pass
+    def __str__(self):
+        return f"{('=')*20}" \
+               f"VIDEO IN ACTION:" \
+               f"Video: \n \r{self.Video} \n" \
+               f"Playing date time: {self.PlayingDateTime}\n" \
+               f"Playing duration: {self.PlayedDuration}\n" \
+               f"Playing from time: {self.PlayFrom}\n" \
+               f"Next Video In Action: \n \r {self.NextVideo}" \
+               f"{('=') * 20}"
 
 
 

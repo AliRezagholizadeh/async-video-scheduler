@@ -50,22 +50,24 @@ def adjust_volume(video_path: Path, potTargetdBFS):
     temp_audio_file = f"{video_path.parents[0]}/audio_{video_name}.{audio_format}"
     # It seems we can use RAM for temp file for more speed..
 
-    # print("temp_audio_file: ", temp_audio_file.name)
     print("temp_audio_file: ", temp_audio_file)
     print("video_path: ", video_path)
+
     # extract and save the audio
-    # ffmpeg_command = f"ffmpeg -i '{str(video_path)}' -vn -acodec copy {str(temp_audio_file.name)}"
-    # out, err, retcode = ffmpegShellRun(ffmpeg_command)
-    # command = ["ffmpeg", "-i", video_path, "-vn", "-acodec", "copy", str(temp_audio_file.name)]
     command = ["ffmpeg", "-i", video_path, "-vn", "-acodec", "copy", temp_audio_file]
-    stderr, code = run_ffmpeg(command)
+    try:
+        stderr, code = run_ffmpeg(command)
+        # access to the saved audio by pydub
 
-    print(f"extract and save audio: code:{code}, err: {stderr}")
-
-    # if(retcode!=0):
-    #     raise Exception("Error in extract and save audio using ffmpeg shell command.")
-    # access to the saved audio by pydub
-    audio_seg = AudioSegment.from_file(temp_audio_file, format = audio_format)
+    except Exception as e:
+        raise e
+    else:
+        if("Output file does not contain any stream" in stderr):
+            audio_seg = None
+            print("The video is SILENCE.")
+        else:
+            print(f"extract and save audio: code:{code}, err: {stderr}")
+            audio_seg = AudioSegment.from_file(temp_audio_file, format=audio_format)
 
     if(audio_seg != None):
         # Get the current dBFS (decibels Full Scale)
@@ -97,13 +99,14 @@ def adjust_volume(video_path: Path, potTargetdBFS):
         else:
             message = f"Current volume ({current_dBFS}) is already acceptable."
 
+        print(f"deleting {temp_audio_file}")
+        os.unlink(temp_audio_file)
 
     else: # clip is silent
         message = "Probable Warning: Clip is siltent.\n"
         current_dBFS = None
 
-    print(f"deleting {temp_audio_file}")
-    os.unlink(temp_audio_file)
+
 
 
     return message, current_dBFS
@@ -247,32 +250,32 @@ async def stream_to_rtmp_async(video_file_path:Path, rtmp_server_address, profil
 
 
 
-async def twoStage_stream_real_time_pipeline(video_file_path:Path, rtmp_server_address):
-    first_ffmpeg_cmd = [
-        "ffmpeg",
-        "-i", str(video_file_path),
-        "-f", "mpegts",
-        # "-filter_complex", "[0:v]scale=1280:720,fps=30,format=yuv420p[v];setsar=1[v1]",
-        "-filter_complex", "[0:v]scale=1280:720,format=yuv420p[v]",
-        "-map", "[v]",
-        "-map", "0:a",
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-b:v", "1500k",
-        "-f", "flv",
-        "pipe:1",
-    ]
+async def twoStage_stream_real_time_pipeline(video_file_path:Path, rtmp_server_address, pre_time="0", post_time="0", stream_started_signal: asyncio.Event = None):
+    # first_ffmpeg_cmd = [
+    #     "ffmpeg",
+    #     "-i", str(video_file_path),
+    #     "-f", "mpegts",
+    #     # "-filter_complex", "[0:v]scale=1280:720,fps=30,format=yuv420p[v];setsar=1[v1]",
+    #     "-filter_complex", "[0:v]scale=1280:720,format=yuv420p[v]",
+    #     "-map", "[v]",
+    #     "-map", "0:a",
+    #     "-c:v", "libx264",
+    #     "-preset", "veryfast",
+    #     "-b:v", "1500k",
+    #     "-f", "flv",
+    #     "pipe:1",
+    # ]
     first_ffmpeg_cmd = [
         "ffmpeg",
         "-re",
         "-copyts",
         "-start_at_zero",
         "-f", "lavfi",
-        "-i", "color=color=black:s=1280x720:r=30:d=5",  # 5s preroll
+        "-i", f"color=color=black:s=1280x720:r=30:d={pre_time}",  # 5s preroll
         "-i", str(video_file_path),
         "-filter_complex",
         "[1:v]scale=1280:720,fps=30,format=yuv420p,setsar=1,"
-        "tpad=stop_mode=clone:stop_duration=10[v1];"
+        f"tpad=stop_mode=clone:stop_duration={post_time}[v1];"
         "[0:v][v1]concat=n=2:v=1:a=0[outv]",
         "-map", "[outv]",
         "-map", "1:a?",  # optional audio stream
@@ -313,8 +316,13 @@ async def twoStage_stream_real_time_pipeline(video_file_path:Path, rtmp_server_a
     ))
 
     async def pipe_output(input_stream, output_stream):
+        first_data = True
         while True:
             chunk = await input_stream.read(4096)
+            if(first_data):
+                if(stream_started_signal):
+                    stream_started_signal.set()
+                first_data = False
             if not chunk:
                 output_stream.write_eof()
                 break
