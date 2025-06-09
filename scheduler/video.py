@@ -238,7 +238,7 @@ class VideoInAction:
 
 
 
-    def __init__(self, config, Video = None, PreviousVideo = None, NextVideo = None, PlayingDateTime = "", PlayFrom = "00:00:00", PlayedDuration = "00:00:00"):
+    def __init__(self, config, Video = None, PreviousVideo = None, NextVideo = None, PlayingDateTime:str = "", PlayFrom:str = "00:00:00", PlayedDuration: str = "00:00:00"):
         # super(VideoInAction, self).__init__()
         self._event = asyncio.Event()
         self.Video = Video

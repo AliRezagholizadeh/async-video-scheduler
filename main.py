@@ -3,6 +3,7 @@ import json
 import yaml
 import datetime
 from scheduler.core import program_pipeline
+from server.utils import is_mediamtx_running
 TIME_FORMAT = "%H:%M:%S"
 
 
@@ -31,13 +32,25 @@ async def main():
     # access to the videos to play to build a streaming pipeline
     source_dir = config["program_source_path"]["video"]
     print(f"config type: {type(config)}")
-    program = program_pipeline(config=config, program_schedule=schedule)
-    # server_task = asyncio.create_task(program.run_server())
-    schedule_task = asyncio.create_task(program.set_run_schedule())
 
-    print("main: awaiting schedule_task")
-    await schedule_task
-    print("main: awaiting server_task")
+    sec = 0
+    timeout = 60
+    while (sec < timeout):
+        if(is_mediamtx_running()): # RTMP server is running
+            program = program_pipeline(config=config, program_schedule=schedule)
+            # server_task = asyncio.create_task(program.run_server())
+            schedule_task = asyncio.create_task(program.set_run_schedule())
+
+            print("main: awaiting schedule_task")
+            await schedule_task
+            print("main: program ended")
+            break
+        else:
+            # wait till the server be set up
+            print("wait till the MediaMTX server run..")
+            await asyncio.sleep(1)
+            sec += 1
+
     # await server_task
     # each time a specific time-frame of the stream is loaded
     # start to play at a certain time with ability to find right time to play in the case of interruption.

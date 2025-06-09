@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 
 
+
 VALID_VIDEO_FORMAT = [".mp4"]
 
 TIME_FORMATS = ["%H:%M:%S.%f", "%H:%M:%S"]
@@ -128,7 +129,7 @@ class PlayingDateTimeProperty:
         if instance is None:
             return self
 
-        return instance.__dict__[self.property_name] or None
+        return instance.__dict__.get(self.property_name) or None
 
     # def __set__(self, instance, value, event):
     def __set__(self, instance, values):
@@ -251,5 +252,4 @@ def run_ffmpeg(command_list):
         return result.stderr.decode(), 0  # returning stderr and success code
     except subprocess.CalledProcessError as e:
         return e.stderr.decode(), e.returncode
-
 
