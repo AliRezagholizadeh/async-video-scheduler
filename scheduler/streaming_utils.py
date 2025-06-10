@@ -320,6 +320,7 @@ async def twoStage_stream_real_time_pipeline(video_file_path:Path, rtmp_server_a
         while True:
             chunk = await input_stream.read(4096)
             if(first_data):
+                print("chunk: ", chunk)
                 if(stream_started_signal):
                     stream_started_signal.set()
                 first_data = False

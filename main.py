@@ -3,7 +3,7 @@ import json
 import yaml
 import datetime
 from scheduler.core import program_pipeline
-from server.utils import is_mediamtx_running
+from server.utils import RTMP_Server
 TIME_FORMAT = "%H:%M:%S"
 
 
@@ -33,31 +33,42 @@ async def main():
     source_dir = config["program_source_path"]["video"]
     print(f"config type: {type(config)}")
 
-    sec = 0
-    timeout = 60
-    while (sec < timeout):
-        if(is_mediamtx_running()): # RTMP server is running
-            program = program_pipeline(config=config, program_schedule=schedule)
-            # server_task = asyncio.create_task(program.run_server())
-            schedule_task = asyncio.create_task(program.set_run_schedule())
 
-            print("main: awaiting schedule_task")
-            await schedule_task
-            print("main: program ended")
-            break
-        else:
-            # wait till the server be set up
-            print("wait till the MediaMTX server run..")
-            await asyncio.sleep(1)
-            sec += 1
+    medimtx = RTMP_Server(config)
+    end_program_siganl = asyncio.Event()
+    server_task = asyncio.create_task(medimtx.run())
+    process = await server_task
+
+    i = 0
+    while(not medimtx.is_mediamtx_running() or not medimtx.has_active_stream()): # RTMP server is not running or pushing the stream
+        print(f"\rWait till the MediaMTX server be launched {('.')*(i%20)}")
+        i += 1
+        await asyncio.sleep(2)
+
+    print("MediaMTX Server is checked being running .. ")
+    program = program_pipeline(config=config, program_schedule=schedule)
+    # server_task = asyncio.create_task(program.run_server())
+    schedule_task = asyncio.create_task(program.set_run_schedule())
+
+
+
+    print("main: awaiting schedule_task")
+    await schedule_task
+    print("main: program ended")
+
+
 
     # await server_task
     # each time a specific time-frame of the stream is loaded
     # start to play at a certain time with ability to find right time to play in the case of interruption.
 
     #
-
-
+    print("server is waiting the program be terminated.")
+    end_program_siganl.set()
+    process.terminate()
+    # if process.returncode is None:
+    #     process.terminate()
+    print("Program finished.")
 
 
 
