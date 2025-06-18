@@ -1,3 +1,4 @@
+"""Functions used in this script have been inspired by ChatGPT or Google AI powered suggestions.  """
 import asyncio
 import subprocess
 import psutil

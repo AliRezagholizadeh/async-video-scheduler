@@ -276,6 +276,8 @@ class VideoInAction:
         # task = asyncio.create_task(async_to_rtmp_server(self.Video.PATH, self.RTMPServerAddress))
         # task = asyncio.create_task(stream_to_rtmp_async(self.Video.PATH, self.RTMPServerAddress))
         stream_started_signal = asyncio.Event()
+        assert isinstance(self.PlayingDateTime, (datetime.datetime, datetime.time))
+        from_time = datetime.datetime.now() - self.PlayingDateTime
         if(self.NextVideo): # no post_time
             task = asyncio.create_task(
                 twoStage_stream_real_time_pipeline(
@@ -341,6 +343,7 @@ class VideoInAction:
     async def timer(self, stream_started_signal: asyncio.Event, stream_finished_event: asyncio.Event):
 
         await stream_started_signal.wait()
+        ## It might need to use the idea for the entire program.
         start_time = datetime.datetime.now()
         base_datetime = datetime.datetime(year=start_time.year, month= start_time.month, day= start_time.day)
 

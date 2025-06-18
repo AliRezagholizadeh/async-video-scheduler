@@ -2,14 +2,24 @@ import asyncio
 import json
 import yaml
 import datetime
-from scheduler.core import program_pipeline
+from scheduler.core import program_pipeline, Program, Program_core
 from server.utils import RTMP_Server
-TIME_FORMAT = "%H:%M:%S"
+from scheduler.utils import TIME_FORMATS, DATE_FORMATS
 
 
 async def main():
     # LOAD
     # load program schedule and config
+    # load config
+    config_file = "config.yaml"
+    with open(config_file, 'r') as confile:
+        config = yaml.safe_load(confile)
+    print(f"config: \n{config} \n{'-' * 10}")
+    # access to the videos to play to build a streaming pipeline
+    source_dir = config["program_source_path"]["video"]
+    print(f"config type: {type(config)}")
+
+    # load program schedule
     schedule_file = "schedule.json"
     with open(schedule_file, "r") as f:
         schedule = json.load(f)
@@ -24,16 +34,10 @@ async def main():
             ontime_contents[ontime_indx]["play_time"] = (start + datetime.timedelta(seconds= 20)).time()
 
     print(f"{'-'*10}\nschedule: \n{schedule} \n{'-'*10}")
-    # load config
-    config_file = "config.yaml"
-    with open(config_file, 'r') as confile:
-        config = yaml.safe_load(confile)
-    print(f"config: \n{config} \n{'-'*10}")
-    # access to the videos to play to build a streaming pipeline
-    source_dir = config["program_source_path"]["video"]
-    print(f"config type: {type(config)}")
 
 
+    # Check RTMP server being active
+    # TODO: check all possibilities might happen.
     medimtx = RTMP_Server(config)
     end_program_siganl = asyncio.Event()
     server_task = asyncio.create_task(medimtx.run())
@@ -46,14 +50,38 @@ async def main():
         await asyncio.sleep(2)
 
     print("MediaMTX Server is checked being running .. ")
-    program = program_pipeline(config=config, program_schedule=schedule)
-    # server_task = asyncio.create_task(program.run_server())
-    schedule_task = asyncio.create_task(program.set_run_schedule())
+    start_dtime = (datetime.datetime.now() + datetime.timedelta(seconds=10)).strftime(f"{DATE_FORMATS[0]} {TIME_FORMATS[0]}") #
+    print("start_dtime:" , start_dtime)
+    program_args = {
+        "start_dtime": start_dtime,
+        "root_program_path": "",
+        "name": "program"
+    }
+    # program = Program.create(**program_args)
+    # program = next(Program.create(**program_args))
+    # program_task = asyncio.create_task(program)
+    # program_body = asyncio.create_task(Program.create(**program_args))
+    # async for program in Program.create(**program_args):
 
+    # schedule_task = asyncio.create_task(Program.create(**program_args))
+    # program = next(program_body)
 
+    # program = program_pipeline(config=config, program_schedule=schedule)
+    # schedule_task = asyncio.create_task(program.set_run_schedule())
 
-    print("main: awaiting schedule_task")
-    await schedule_task
+    # program_main = asyncio.create_task(Program.create(**program_args))
+    # print(" >>> program created .. Now run it ..")
+    # program_run = asyncio.create_task(program_main.result().run())
+
+    # async with Program.create(**program_args) as program:
+    async with Program_core(**program_args) as program:
+        program_run = asyncio.create_task(program.run())
+
+        print("main: awaiting run")
+        await program_run
+        print("main: awaiting program main clock")
+
+    # await program_main
     print("main: program ended")
 
 

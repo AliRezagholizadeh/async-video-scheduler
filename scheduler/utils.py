@@ -53,22 +53,24 @@ def ValidDateTimeFormat(datetimestr: str, required = True):
     # value should be in TIME_FORMATS format
     # cast str to a predefined valid time format..
     raised_error = ""
-    datetime = None
+    datetime_obj = None
     for datetimetup in product(DATE_FORMATS, TIME_FORMATS):
         datetimeformat = f"{datetimetup[0]} {datetimetup[1]}"
+        # print("datetimeformat: ", datetimeformat)
         try:
-            datetime = datetime.datetime.strptime(datetimestr, datetimeformat)
+            datetime_obj = datetime.datetime.strptime(datetimestr, datetimeformat)
             # print("datetimestr: ", datetimestr, "to datetime: ", datetime)
+            # print("datetime: ", datetime_obj)
             raised_error = ""
             break
         except Exception as e:
-            raised_error += f"Datetime ({datetimestr}) should be in {datetimeformat} format. {e}\n"
+            raised_error += f"Datetime ({datetimestr}, str: {isinstance(datetimestr, str)}) should be in {datetimeformat} format. {e}\n"
             continue
 
     if (required and raised_error):
-        raise ValueError(f"Datetime ({datetimestr}) should be in a valid {product(DATE_FORMATS, TIME_FORMATS)} format.")
+        raise ValueError(f"{raised_error} \n")
 
-    return datetime
+    return datetime_obj
 
 
 class ReqDateTimeFormatProperty:
@@ -112,7 +114,7 @@ class DateTimeFormatProperty:
         if not isinstance(value, str):
             raise ValueError(f'The {self.property_name} must be a string')
 
-        time_value = self.validfunc(value)
+        time_value = self.validfunc(value, required =False)
         instance.__dict__[self.property_name] = time_value
 
 
@@ -252,4 +254,69 @@ def run_ffmpeg(command_list):
         return result.stderr.decode(), 0  # returning stderr and success code
     except subprocess.CalledProcessError as e:
         return e.stderr.decode(), e.returncode
+
+
+
+
+class CurrentDTimeProperty:
+    def __set_name__(self, owner, name):
+        self.property_name = name
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        # instance.__dict__[self.property_name] = datetime.datetime.now().strftime(f"{DATE_FORMATS[0]} {TIME_FORMATS[0]}")
+        current = datetime.datetime.now()
+        current_ = datetime.datetime.now().strftime(f"{DATE_FORMATS[0]} {TIME_FORMATS[0]}")
+
+        return current, current_
+
+
+
+class MainClock:
+    """Main clock which is going to trigger pulses in every 1/frequency second with the help of its _event."""
+    _instance = None
+    _event = None
+
+    def __init__(self, frequency = 1):
+        """frequency of triggering the event in each second."""
+        self.frequency = frequency
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            # cls._instance = super().__new__(cls, *args, **kwargs)
+            cls._event = asyncio.Event()
+            cls._instance = super().__new__(cls, *args, **kwargs)
+        return cls._instance
+
+    async def timer(self):
+        while(True):
+
+            await asyncio.sleep(1/self.frequency)
+            if(not self._event.is_set()):
+                self._event.set()
+                # print(">> CLOCK-level: event is set. So the worker is able to use it..")
+
+            else:
+                print("!!! CLOCK-level: event is not cleared. So the worker has not used..")
+
+    def get_event(self):
+        assert isinstance(self._event, asyncio.Event), f"Clock event is: {self._event}"
+        # print("clock event: ", self._event)
+        return self._event
+
+
+class CLOCKProperty:
+    def __set_name__(self, owner, name):
+        self.property_name = name
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+
+        # Instantiate from the MainClock
+        clock = MainClock()
+        # print("main clok set..")
+        return clock
+
 
