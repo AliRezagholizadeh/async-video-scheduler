@@ -16,11 +16,12 @@ async def main():
         config = yaml.safe_load(confile)
     print(f"config: \n{config} \n{'-' * 10}")
     # access to the videos to play to build a streaming pipeline
-    source_dir = config["program_source_path"]["video"]
+    video_source_dir = config["program_source_path"]["video"]
     print(f"config type: {type(config)}")
 
+    program_name = "Daily_Contents/Day1"
     # load program schedule
-    schedule_file = "schedule.json"
+    schedule_file = video_source_dir + f"{program_name}/schedule.json"
     with open(schedule_file, "r") as f:
         schedule = json.load(f)
 
@@ -50,12 +51,13 @@ async def main():
         await asyncio.sleep(2)
 
     print("MediaMTX Server is checked being running .. ")
-    start_dtime = (datetime.datetime.now() + datetime.timedelta(seconds=10)).strftime(f"{DATE_FORMATS[0]} {TIME_FORMATS[0]}") #
-    print("start_dtime:" , start_dtime)
+    # start_dtime = (datetime.datetime.now() + datetime.timedelta(seconds=10)).strftime(f"{DATE_FORMATS[0]} {TIME_FORMATS[0]}") #
+    # print("start_dtime:" , start_dtime)
+
+
     program_args = {
-        "start_dtime": start_dtime,
-        "root_program_path": "",
-        "name": "program"
+        "root_program_path": video_source_dir + f"{program_name}/",
+        "name": "sample_program"
     }
     # program = Program.create(**program_args)
     # program = next(Program.create(**program_args))
