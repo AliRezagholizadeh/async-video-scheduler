@@ -111,6 +111,7 @@ class Video:
         if(not self._Length):
             raise ValueError("Video length is not recognized.")
         return self._Length
+
     @property
     def Resolution(self):
         if (not self._Resolution):
@@ -221,16 +222,10 @@ class Video:
         self.changelog += changelog
 
 
-
 class VideoInAction:
     RTMPServerAddress = None
 
     Video = VideoProperty()
-    PreviousVideo = VideoInActionProperty()
-    NextVideo = VideoInActionProperty()
-
-    # StartedTime = DateTimeFormatProperty(ValidTimeFormat)
-    # EndTime = DateTimeFormatProperty(ValidTimeFormat)
     PlayingDateTime = PlayingDateTimeProperty(Either(ValidDateTimeFormat,ValidTimeFormat))
     PlayFrom = DateTimeFormatProperty(ValidTimeFormat)
     PlayedDuration = DateTimeFormatProperty(ValidTimeFormat)
@@ -238,15 +233,18 @@ class VideoInAction:
 
 
 
-    def __init__(self, config, Video = None, PreviousVideo = None, NextVideo = None, PlayingDateTime:str = "", PlayFrom:str = "00:00:00", PlayedDuration: str = "00:00:00"):
+    # def __init__(self, config, Video = None, PreviousVideo = None, NextVideo = None, PlayingDateTime:str = "", PlayFrom:str = "00:00:00", PlayedDuration: str = "00:00:00"):
+    def __init__(self, config, Video = None, PlayingDateTime:str = "", PlayFrom:str = "00:00:00", PlayedDuration: str = "00:00:00"):
         # super(VideoInAction, self).__init__()
         self._event = asyncio.Event()
         self.Video = Video
-        self.PreviousVideo = PreviousVideo
-        self.NextVideo = NextVideo
+        # self.PreviousVideo = PreviousVideo
+        # self.NextVideo = NextVideo
         self._PlayingDateTime = PlayingDateTime
         self.PlayFrom = PlayFrom
         self.PlayedDuration = PlayedDuration
+        self.base_datetime = datetime.datetime(year=self.Start_DTime.year, month= self.Start_DTime.month, day= self.Start_DTime.day)
+
         # at playing time
         # self.StartTime = StartTime
         # self.PlayingDateTime = PlayingDateTime
@@ -383,6 +381,235 @@ class VideoInAction:
     @property
     def _PlayingStatus(self):
         return self._PlayingStatustus
+
+    @property
+    def EndTime(self):
+        assert self.Video.Length, f"video length is not recognized for {self.Video} .."
+        assert self.PlayingDateTime, f"Playing time is not set for {self.Video} .."
+        message = ""
+        for timeformat in TIME_FORMATS:
+            try:
+                dt_leng = datetime.datetime.strptime(self.Video.Length, timeformat)
+                message = ""
+            except Exception as e:
+                message += f"\n{e}"
+        assert not message, f"{message}"
+
+        delta_video_lenght = datetime.timedelta(hours= dt_leng.hour, minutes= dt_leng.minute, seconds=dt_leng.second, microseconds= dt_leng.microsecond)
+
+
+        return self.PlayingDateTime + delta_video_lenght
+
+    def set_start_end(self, startime:datetime.time = None, endtime:datetime.time = None):
+        assert isinstance(startime, datetime.time), f"startime is not in time format, it is: {type(startime)} "
+        assert isinstance(endtime, datetime.time), f"endtime is not in time format, it is: {type(endtime)} "
+        self.StartTime = startime
+        self.EndTime = endtime
+    def set_display_title(self, display_title: str):
+        assert isinstance(display_title, str), f"display_title is not in string format, it is: {type(display_title)} "
+        self.DisplayedTitle = display_title
+
+    def run(self):
+        pass
+    def pause(self):
+        pass
+    def stop(self):
+        pass
+    def __str__(self):
+        return f"{('=')*20}" \
+               f"VIDEO IN ACTION:" \
+               f"Video: \n \r{self.Video} \n" \
+               f"Playing date time: {self.PlayingDateTime}\n" \
+               f"Playing duration: {self.PlayedDuration}\n" \
+               f"Playing from time: {self.PlayFrom}\n" \
+               f"Next Video In Action: \n \r {self.NextVideo}" \
+               f"{('=') * 20}"
+
+
+
+
+class VideoInAction2:
+    RTMPServerAddress = None
+
+    Video = VideoProperty()
+    # PreviousVideo = VideoInActionProperty()
+    # NextVideo = VideoInActionProperty()
+
+    # StartedTime = DateTimeFormatProperty(ValidTimeFormat)
+    # EndTime = DateTimeFormatProperty(ValidTimeFormat)
+    PlayingDateTime = PlayingDateTimeProperty(Either(ValidDateTimeFormat,ValidTimeFormat))
+    PlayFrom = DateTimeFormatProperty(ValidTimeFormat)
+    PlayedDuration = DateTimeFormatProperty(ValidTimeFormat)
+    # ResumedOn = List[DateTimeFormatProperty(ValidTimeFormat)]
+
+
+
+    # def __init__(self, config, Video = None, PreviousVideo = None, NextVideo = None, PlayingDateTime:str = "", PlayFrom:str = "00:00:00", PlayedDuration: str = "00:00:00"):
+    def __init__(self, config, Video = None, PlayingDateTime:str = "", PlayFrom:str = "00:00:00", PlayedDuration: str = "00:00:00"):
+        # super(VideoInAction, self).__init__()
+        self._event = asyncio.Event()
+        self.Video = Video
+        # self.PreviousVideo = PreviousVideo
+        # self.NextVideo = NextVideo
+        self._PlayingDateTime = PlayingDateTime
+        self.PlayFrom = PlayFrom
+        self.PlayedDuration = PlayedDuration
+        self.base_datetime = datetime.datetime(year=self.Start_DTime.year, month= self.Start_DTime.month, day= self.Start_DTime.day)
+
+        # at playing time
+        # self.StartTime = StartTime
+        # self.PlayingDateTime = PlayingDateTime
+        # # self.EndTime = None
+        # self._DisplayedTitle = None
+        # # self._PlayingDateTime = None
+        # self._ResumedTime = None
+        # self._PlayingStatus = VideoStatus.NOTPLAYED
+
+        # configure class variable: RTMPServerAddress
+        address = config['RTMPServerAddress']['server_address']
+        port = config['RTMPServerAddress']['server_port']
+        tail = config['RTMPServerAddress']['tail']
+        VideoInAction.setServerAddress(address, port, tail)
+        self.config = config
+
+
+
+
+    async def on_time_stream(self):
+        assert self._PlayingDateTime, "Playing date/time should be set first."
+        # set PlayingDateTime class variable to trigger a watchdog
+        self.PlayingDateTime = str(self._PlayingDateTime), self._event
+        # wait till the date & time arrives
+        await self._event.wait()
+        print(f"Time to play {self.Video}")
+        # task = asyncio.create_task(async_to_rtmp_server(self.Video.PATH, self.RTMPServerAddress))
+        # task = asyncio.create_task(stream_to_rtmp_async(self.Video.PATH, self.RTMPServerAddress))
+        stream_started_signal = asyncio.Event()
+        assert isinstance(self.PlayingDateTime, (datetime.datetime, datetime.time))
+        from_time = datetime.datetime.now() - self.PlayingDateTime
+        if(self.NextVideo): # no post_time
+            task = asyncio.create_task(
+                twoStage_stream_real_time_pipeline(
+                self.Video.PATH, self.RTMPServerAddress,
+                pre_time = "10", stream_started_signal = stream_started_signal
+                )
+            )
+        else: # # consider post_time to let server drains the pipe
+            task = asyncio.create_task(
+                twoStage_stream_real_time_pipeline(
+                    self.Video.PATH, self.RTMPServerAddress,
+                    pre_time = "10", post_time = "10", stream_started_signal = stream_started_signal
+                )
+            )
+        # task = asyncio.create_task(stream_with_silent_audio_async(self.Video.PATH, self.RTMPServerAddress))
+        print("to set timer for playback:")
+        play_termination_e = asyncio.Event()
+        timer_task = asyncio.create_task(self.timer(stream_started_signal, play_termination_e))
+
+        await task
+
+        play_termination_e.set()
+        print(f"streaming {self.Video.Name} finished..")
+        await timer_task
+
+        if(self.NextVideo):
+            next_stream_task = asyncio.create_task(self.NextVideo.stream_next())
+
+            await next_stream_task
+
+    async def stream_next(self):
+
+        stream_started_signal = asyncio.Event()
+        if (self.NextVideo):  # no post_time
+            task = asyncio.create_task(
+                twoStage_stream_real_time_pipeline(
+                    self.Video.PATH, self.RTMPServerAddress, stream_started_signal = stream_started_signal
+                )
+            )
+        else:  # # consider post_time to let server drains the pipe
+            task = asyncio.create_task(
+                twoStage_stream_real_time_pipeline(
+                    self.Video.PATH, self.RTMPServerAddress, post_time="10", stream_started_signal = stream_started_signal
+                )
+            )        # task = asyncio.create_task(stream_with_silent_audio_async(self.Video.PATH, self.RTMPServerAddress))
+
+        print(f"Tow stage ffmpeg stream is set for {self.Video.Name}.\n Plybeck timer:")
+        play_termination_e = asyncio.Event()
+        timer_task = asyncio.create_task(self.timer(stream_started_signal, play_termination_e))
+
+        await task
+
+        play_termination_e.set()
+        print(f"{self.Video.Name} streaming finished..")
+        await timer_task
+
+        if(self.NextVideo):
+            print("next video is going to be started soon.")
+            next_stream_task = asyncio.create_task(self.NextVideo.stream_next())
+
+            await next_stream_task
+
+    async def timer(self, stream_started_signal: asyncio.Event, stream_finished_event: asyncio.Event):
+
+        await stream_started_signal.wait()
+        ## It might need to use the idea for the entire program.
+        start_time = datetime.datetime.now()
+        base_datetime = datetime.datetime(year=start_time.year, month= start_time.month, day= start_time.day)
+
+        while(not stream_finished_event.is_set()):
+            current_t = datetime.datetime.now()
+            passed = (base_datetime + (current_t - start_time)).time().strftime(TIME_FORMATS[1])
+            print(f"\rstarted: {str(start_time)} - Passed: {passed}", end="")
+            # print('\r Now: [%s%]' % current_t, '\r passed [%s%%]' % passed, end="")
+            await asyncio.sleep(0.1)
+
+        print("\n")
+    @classmethod
+    def setServerAddress(cls, address, port, tail):
+        if(cls.RTMPServerAddress == None):
+            cls.RTMPServerAddress = f"rtmp://{address}:{port}{tail}"
+
+    # @property
+    # def StartTime(self):
+    #     return self._StartTime
+
+    # @property
+    # def EndTime(self):
+    #     return self._EndTime
+
+    @property
+    def DisplayedTitle(self):
+        return self._DisplayedTitle
+
+    # @property
+    # def PlayingDateTime(self):
+    #     return self._PlayingDateTime
+
+    @property
+    def ResumedTime(self):
+        return self._ResumedTime
+
+    @property
+    def _PlayingStatus(self):
+        return self._PlayingStatustus
+
+    @property
+    def EndTime(self):
+        assert self.Video.Length, f"video length is not recognized for {self.Video} .."
+        assert self.PlayingDateTime, f"Playing time is not set for {self.Video} .."
+        message = ""
+        for timeformat in TIME_FORMATS:
+            try:
+                dt_leng = datetime.datetime.strptime(self.Video.Length, timeformat)
+                message = ""
+            except Exception as e:
+                message += f"\n{e}"
+        assert not message, f"{message}"
+
+        delta_video_lenght = datetime.timedelta(hours= dt_leng.hour, minutes= dt_leng.minute, seconds=dt_leng.second, microseconds= dt_leng.microsecond)
+
+
+        return self.PlayingDateTime + delta_video_lenght
 
     def set_start_end(self, startime:datetime.time = None, endtime:datetime.time = None):
         assert isinstance(startime, datetime.time), f"startime is not in time format, it is: {type(startime)} "

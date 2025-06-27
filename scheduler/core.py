@@ -95,6 +95,9 @@ class Program_core:
         current_dtime, _ = self.Current_DTime
         return current_dtime - self.Start_DTime
 
+    def content_filler_decider(self):
+        pass
+
     async def Clock_Updater(self):
         # print("Clock_Updater ..")
         while(not self.end_program_siganl.is_set()):
@@ -114,9 +117,14 @@ class Program_core:
 
                 # Schedule handler : Select the earlier video and specify the point it should be streamed.
                 if(self.ordered_schedule and self.ordered_schedule[-1](0) <= self.Current_DTime[0]): # check if the time to show the earliest content just arrived..
+                    # decide to play from which time
                     content_dTime = self.ordered_schedule[-1](0)
+                    content_video = self.ordered_schedule[-1](1)
                     fromTime = (self.base_datetime + (self.Current_DTime[0] - content_dTime)).time().strftime(TIME_FORMATS[1])
 
+
+                    if(content_video.Length - fromTime > 0.9 * ):
+                        pass
                     self.stream(self.ordered_schedule.pop(), fromTime)
             except Exception as e:
                 print(f"ERROR: {e}")
